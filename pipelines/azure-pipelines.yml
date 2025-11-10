@@ -1,0 +1,140 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - 'terraform/**'
+
+pr:
+  branches:
+    include:
+      - '*'
+  paths:
+    include:
+      - 'terraform/**'
+
+pool:
+  name: Ivan-hosted-pool
+
+variables:
+- group: terraform-secrets
+- name: 'terraformVersion'
+  value: '1.9.8'
+- name: 'environment'
+  value: 'dev'
+- name: 'backend_rg'
+  value: 'tfstate-rg'
+- name: 'backend_storage'
+  value: 'tfstatestorageivan'
+- name: 'backend_container'
+  value: 'tfstate'
+- name: 'backend_key'
+  value: 'infra/terraform.tfstate'
+- name: 'deploymentBranch'
+  value: 'refs/heads/main'
+
+stages:
+
+- stage: Terraform_Plan
+  displayName: "Terraform Init + Plan (PR)"
+  condition: succeeded()
+  jobs:
+  - job: Plan
+    steps:
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Init + Plan'
+      inputs:
+        azureSubscription: 'AzureServiceConnection'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          $terraformDir = "$(System.DefaultWorkingDirectory)\terraform"
+          cd $terraformDir
+
+          # Set environment variables for SP authentication (AzureRM provider)
+          $env:ARM_CLIENT_ID = "$(servicePrincipalId)"
+          $env:ARM_CLIENT_SECRET = "$(servicePrincipalKey)"
+          $env:ARM_SUBSCRIPTION_ID = "$(subscriptionId)"
+          $env:ARM_TENANT_ID = "$(tenantId)"
+
+          Write-Host "Initializing Terraform backend..."
+          terraform init `
+            -reconfigure `
+            -backend-config="resource_group_name=$(backend_rg)" `
+            -backend-config="storage_account_name=$(backend_storage)" `
+            -backend-config="container_name=$(backend_container)" `
+            -backend-config="key=$(backend_key)"
+    
+          Write-Host "Planning..."
+          terraform plan `
+            -input=false `
+            -no-color `
+            -var "admin_password=$(admin_password)" `
+            -var "db_admin_password=$(db_admin_password)" `
+            -out=tfplan
+
+          $tfplanPath = Join-Path $terraformDir "tfplan"
+          if (-Not (Test-Path $tfplanPath)) {
+              Write-Error "Terraform plan file not found at $tfplanPath"
+              exit 1
+          }
+
+          Write-Host "Exporting plan to artifact..."
+          New-Item -ItemType Directory -Force -Path $(Build.ArtifactStagingDirectory)
+          Copy-Item -Path $tfplanPath -Destination "$(Build.ArtifactStagingDirectory)\tfplan"
+
+    - publish: $(Build.ArtifactStagingDirectory)
+      artifact: terraform_plan
+
+- stage: Terraform_Apply
+  displayName: "Terraform Apply (main branch)"
+  dependsOn: Terraform_Plan
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], variables['deploymentBranch']), ne(variables['Build.Reason'], 'PullRequest'))
+  jobs:
+  - job: Apply
+    steps:
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    - download: current
+      artifact: terraform_plan
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Apply'
+      inputs:
+        azureSubscription: 'AzureServiceConnection'
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          $terraformDir = "$(System.DefaultWorkingDirectory)\terraform"
+          cd $terraformDir
+
+          # Set SP authentication for apply as well
+          $env:ARM_CLIENT_ID = "$(servicePrincipalId)"
+          $env:ARM_CLIENT_SECRET = "$(servicePrincipalKey)"
+          $env:ARM_SUBSCRIPTION_ID = "$(subscriptionId)"
+          $env:ARM_TENANT_ID = "$(tenantId)"
+
+          Write-Host "Reinitializing backend..."
+          terraform init `
+            -reconfigure `
+            -backend-config="resource_group_name=$(backend_rg)" `
+            -backend-config="storage_account_name=$(backend_storage)" `
+            -backend-config="container_name=$(backend_container)" `
+            -backend-config="key=$(backend_key)"
+
+          $tfplanPath = "$(Pipeline.Workspace)\terraform_plan\tfplan"
+          if (-Not (Test-Path $tfplanPath)) {
+              Write-Error "Terraform plan file not found at $tfplanPath"
+              exit 1
+          }
+          Write-Host "Applying plan..."
+          terraform apply -auto-approve $tfplanPath
