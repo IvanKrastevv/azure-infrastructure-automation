@@ -71,7 +71,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "web" {
   
   automatic_instance_repair {
     enabled      = true
-    grace_period = "PT30M"
+    # grace_period = "PT30M" - real use
+    grace_period = "PT2M" # Use for demo
   }
 }
 
