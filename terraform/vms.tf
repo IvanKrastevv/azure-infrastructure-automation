@@ -8,7 +8,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "web" {
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   sku                 = "Standard_B1ms"
-  instances           = 1
+  instances           = 3
   admin_username      = var.admin_username
   admin_password      = var.admin_password
   disable_password_authentication = false
@@ -87,8 +87,8 @@ resource "azurerm_monitor_autoscale_setting" "web" {
     name = "AutoScale"
     
     capacity {
-      default = 1
-      minimum = 1
+      default = 3
+      minimum = 3
       maximum = var.autoscale_max
     }
     
