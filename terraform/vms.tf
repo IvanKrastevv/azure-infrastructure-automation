@@ -100,7 +100,7 @@ resource "azurerm_monitor_autoscale_setting" "web" {
         time_grain         = "PT1M"
         statistic          = "Average"
         # time_window        = "PT5M" - realistic use
-        time_window        = "PT3M" # Demo 
+        time_window        = "PT1M" # Demo 
         time_aggregation   = "Average"
         operator           = "GreaterThan"
         threshold          = 75
