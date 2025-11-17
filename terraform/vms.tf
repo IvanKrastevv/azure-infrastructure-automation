@@ -99,7 +99,8 @@ resource "azurerm_monitor_autoscale_setting" "web" {
         metric_resource_id = azurerm_linux_virtual_machine_scale_set.web.id
         time_grain         = "PT1M"
         statistic          = "Average"
-        time_window        = "PT5M"
+        # time_window        = "PT5M" - realistic use
+        time_window        = "PT3M" # Demo 
         time_aggregation   = "Average"
         operator           = "GreaterThan"
         threshold          = 75
@@ -120,7 +121,8 @@ resource "azurerm_monitor_autoscale_setting" "web" {
         metric_resource_id = azurerm_linux_virtual_machine_scale_set.web.id
         time_grain         = "PT1M"
         statistic          = "Average"
-        time_window        = "PT10M"
+        # time_window        = "PT10M" - realistic use
+        time_window        = "PT3M"
         time_aggregation   = "Average"
         operator           = "LessThan"
         threshold          = 25
