@@ -68,6 +68,19 @@ resource "azurerm_network_security_group" "web" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+
+  # Just for test if I need to SSH from my laptop open that 
+  security_rule {
+    name                       = "AllowSSH"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+  }
 }
 
 # Associate NSG with Subnet
