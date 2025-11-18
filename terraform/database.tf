@@ -9,6 +9,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
   location               = azurerm_resource_group.main.location
   version                = "16"
 
+
   # Admin credentials
   administrator_login    = var.db_admin_username
   administrator_password = var.db_admin_password
